@@ -46,6 +46,29 @@ The [`ToThreshold`](https://godoc.org/github.com/mandykoh/autocrop#ToThreshold) 
 croppedImg := autocrop.ToThreshold(img, energyThreshold)
 ```
 
+### Protecting a subject
+
+Pure energy-based cropping can cut off parts of an image that matter — for example a trophy held out to the side of a person’s face. To prevent this, `BoundsForCrop` accepts one or more protected rectangles and an optional target aspect ratio. It starts from the same energy crop as `BoundsForThreshold` and returns the smallest crop which still contains every protected rectangle, satisfies the requested ratio (after pixel rounding), and remains inside the image:
+
+```go
+crop, err := autocrop.BoundsForCrop(img, autocrop.CropOptions{
+    EnergyThreshold:  0.1,
+    AspectRatio:      16.0 / 9.0,
+    ProtectedRegions: []image.Rectangle{trophyBounds},
+})
+```
+
+The aspect ratio is satisfied within `AspectRatioTolerance` (relative deviation, `DefaultAspectRatioTolerance` — 0.5% — by default), because an exact ratio is not always representable in whole pixels. `ToCrop` returns the cropped image directly:
+
+```go
+croppedImg, err := autocrop.ToCrop(img, autocrop.CropOptions{
+    EnergyThreshold:  0.1,
+    ProtectedRegions: []image.Rectangle{trophyBounds},
+})
+```
+
+`BoundsForCrop` returns a descriptive error (checkable with `errors.Is`) if the image is empty, a protected rectangle is empty, outside the image, or overlaps another, the aspect ratio or tolerance is invalid, the image is too small to represent the ratio, the energy crop cannot satisfy the ratio, or the protected rectangles cannot all be kept at that ratio. When no protected rectangles and no aspect ratio are given, the result is identical to `BoundsForThreshold`, so existing behaviour is unchanged.
+
 ## Command line tool
 
 `autocrop` also provides a command line tool that can be installed as follows:
@@ -57,7 +80,15 @@ $ go install github.com/mandykoh/autocrop/cmd/autocrop
 and used to crop images like this:
 
 ```
-$ autocrop <input_image> <output_png> [threshold]
+$ autocrop [options] <input_image> <output_png> [threshold]
 ```
 
 The threshold is optional and defaults to 0.1.
+
+Protected rectangles and a target aspect ratio can be supplied with the `-protect` and `-aspect` options:
+
+```
+$ autocrop -protect 238,126,55,86 -aspect 4:3 <input_image> <output_png> 0.25
+```
+
+`-protect` takes `x,y,width,height` and may be repeated; `-aspect` takes `width:height`; and `-aspect-tolerance` overrides the default 0.5% tolerance.
